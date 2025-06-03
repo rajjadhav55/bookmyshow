@@ -196,7 +196,6 @@ def movie_list(request):
 
 
 @api_view(["GET"])
-
 @permission_classes([IsAuthenticated])
 def theater_list (request):
     if request.method == "GET":
