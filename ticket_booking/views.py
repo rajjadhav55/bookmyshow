@@ -15,7 +15,7 @@ from django.contrib.auth import authenticate, login, logout
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .utils import generate_jwt
+# from .utils import generate_jwt
 
 
 User = get_user_model() 
@@ -76,27 +76,27 @@ def register_user(request):
 
 
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def login_user(request):
-    try:
-        data = json.loads(request.body)
-        username = data.get("username")
-        password = data.get("password")
+# @csrf_exempt
+# @require_http_methods(["POST"])
+# def login_user(request):
+#     try:
+#         data = json.loads(request.body)
+#         username = data.get("username")
+#         password = data.get("password")
 
-        if not username or not password:
-            return JsonResponse({"error": "Username and password are required"}, status=400)
+#         if not username or not password:
+#             return JsonResponse({"error": "Username and password are required"}, status=400)
 
-        user = authenticate(username=username, password=password)
-        if user is None:
-            return JsonResponse({"error": "Invalid credentials"}, status=401)
+#         user = authenticate(username=username, password=password)
+#         if user is None:
+#             return JsonResponse({"error": "Invalid credentials"}, status=401)
 
-        token = generate_jwt(user)
+#         token = generate_jwt(user)
 
-        return JsonResponse({"token": token, "message": "Login successful"})
+#         return JsonResponse({"token": token, "message": "Login successful"})
 
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+#     except Exception as e:
+#         return JsonResponse({"error": str(e)}, status=500)
 
 
 # @csrf_exempt
