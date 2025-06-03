@@ -1,0 +1,1 @@
+python manage.py shell < seat_numbering.py
