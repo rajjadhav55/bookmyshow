@@ -15,12 +15,13 @@ from django.contrib.auth import authenticate, login, logout
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-# from .utils import generate_jwt
+# from .utils import generate_jwt 
+# 
 
 
 User = get_user_model() 
 
-@csrf_exempt
+@csrf_exempt 
 @require_http_methods(["POST"])
 def register_user(request):
     try:
@@ -99,30 +100,6 @@ def register_user(request):
 #         return JsonResponse({"error": str(e)}, status=500)
 
 
-# @csrf_exempt
-# @require_http_methods(["GET", "POST"])
-# def ongoing_movie_list(request):
-#     if request.method == "GET":
-#         current_time = timezone.now()
-
-#         ongoing_movies = Movie.objects.filter(show__time_slot__gte =current_time).distinct()
-#         data = []
-
-#         for movie in ongoing_movies:
-#             data.append({
-#                 "id": movie.id,
-#                 "title": movie.title,
-#                 "duration_min": movie.duration_min,
-#                 #"show_dates": sorted(dates)
-#              })
-
-#         return JsonResponse(data, safe=False)
-
-# @require_http_methods(["GET", "POST"])
-# def upcoming_movies(request):
-#     today = timezone.now().date()
-#     movies = Movie.objects.filter(release_date__gt=today).values("id", "title", "duration_min")
-#     return JsonResponse(list(movies), safe=False)
 
 
 
@@ -139,6 +116,7 @@ def movie_list(request):
     date = request.GET.get("date")
     genre = request.GET.get("genre")
     language = request.GET.get("language")
+    
 
     try:
         #  Parse date if provided
