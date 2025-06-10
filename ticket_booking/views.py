@@ -1,20 +1,26 @@
-from datetime import datetime
-from django.utils import timezone
-from django.contrib.auth import get_user_model
+import os
 import json , uuid
-from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-from django.db.models import Min , F
-from django.contrib.postgres.aggregates import ArrayAgg
-from django.db.models.functions import JSONObject
+from weasyprint import HTML
+from datetime import datetime
 from datetime import timedelta
 from django.db import transaction
-from django.contrib.auth import authenticate, login, logout
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from django.shortcuts import  render
+from django.db.models import Min , F
 from rest_framework.response import Response
+from django.templatetags.static import static
+from django.contrib.auth import get_user_model
+from django.db.models.functions import JSONObject
+from django.http import JsonResponse ,HttpResponse
+from django.template.loader import render_to_string
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.postgres.aggregates import ArrayAgg
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login, logout
+from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view, permission_classes
+from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session
 # from .utils import generate_jwt 
 # 
 
@@ -40,8 +46,10 @@ def register_user(request):
             return JsonResponse({"error": "Username, email, and password are required"}, status=400)
         
         user = User.objects.all()
+
         if  not contact_no.isdigit():
             return JsonResponse("contact number should be number only",safe=False)
+        
         
         if len(contact_no) != 10:
             return JsonResponse("Contact number must be exactly 10 digits.",safe=False)
@@ -74,37 +82,6 @@ def register_user(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
-
-
-# @csrf_exempt
-# @require_http_methods(["POST"])
-# def login_user(request):
-#     try:
-#         data = json.loads(request.body)
-#         username = data.get("username")
-#         password = data.get("password")
-
-#         if not username or not password:
-#             return JsonResponse({"error": "Username and password are required"}, status=400)
-
-#         user = authenticate(username=username, password=password)
-#         if user is None:
-#             return JsonResponse({"error": "Invalid credentials"}, status=401)
-
-#         token = generate_jwt(user)
-
-#         return JsonResponse({"token": token, "message": "Login successful"})
-
-#     except Exception as e:
-#         return JsonResponse({"error": str(e)}, status=500)
-
-
-
-
-
-
-
 
 
 
@@ -191,6 +168,54 @@ def movie_list(request):
 
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def language_list(request):
+    languages = request.GET.get("language")
+
+    language = Language.objects.all()
+    try:
+        if languages:
+            language = language.filter(name__icontains=languages)
+
+        lang=[]
+        for languages in language:
+            lang.append(languages.name)
+
+        return JsonResponse({
+                "languages":lang
+            })
+    except Language.DoesNotExist:
+        return JsonResponse({"error": "language not found."}, status=404)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def genre_list (request):
+    genres = request.GET.get('genre')
+
+    genre = Genre.objects.all()
+    try:
+        if genres:
+            genre = genre.filter(name__icontains=genres)
+
+        genre_list=[]
+        for genres in genre:
+            genre_list.append(genres.name)
+
+        return JsonResponse({
+                "genres":genre_list
+            })
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    
+
+    
+
+
 
 
 
@@ -243,7 +268,8 @@ def booking_info (request):
 
     try:
       user = request.user
-        
+      if not user.is_authenticated:
+          return JsonResponse({"success": False, "error": "User not authenticated"}, status=401)
     except User.DoesNotExist:
         return JsonResponse({"success": False, "error": "User not found"}, status=404)
 
@@ -254,13 +280,26 @@ def booking_info (request):
         seat_numbers = []
         for seat in booking.seats.all():
             seat_numbers.append(seat.seat_number)
+            movie = booking.show.movie
+            if movie.image:
+                movie_image_url = movie.image.url
+            else:
+                movie_image_url = None
 
         booking_info_data.append({
             "booking_id":booking.id,
+            "movie_title": booking.show.movie.title,
+            "movie_image": movie_image_url,
+            "theater_name": booking.show.theater.name,
             "show_id":booking.show.id,
+            "show_date": booking.show.time_slot.date(),
+            "showtime": booking.show.time_slot.strftime("%I:%M %p"),
             "booking_time":booking.booking_time,
             "seat_number":seat_numbers,
+            "total_price": f'₹{booking.show.price * booking.number_of_tickets}/-',
             "is_paid":booking.is_paid,
+
+            
 
         })
     return JsonResponse({
@@ -268,6 +307,42 @@ def booking_info (request):
         "username": user.username,
         "bookings": booking_info_data
     })
+
+
+
+
+
+
+
+
+
+
+@login_required
+def generate_invoice_pdf(request, booking_id):
+    booking = Bookinginfo.objects.get(id=booking_id, user=request.user)
+    seat_numbers = []
+    for seat in booking.seats.all():
+        seat_numbers.append(seat.seat_number)
+
+    # Generate absolute image URL
+    image_url = request.build_absolute_uri(booking.show.movie.image.url)
+
+   
+    html_string = render_to_string('ticket.html', {
+        'booking': booking,
+        'seat_numbers': seat_numbers,
+        'image_url': image_url,
+        "total_price": f'₹{booking.show.price * booking.number_of_tickets}/-',
+    })
+
+    # Generate PDF with base URL to load external assets
+    pdf_file = HTML(string=html_string, base_url=request.build_absolute_uri('/')).write_pdf()
+
+    # Return the PDF as a downloadable response
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename=Invoice_{booking.id}.pdf'
+    return response
+
 
 
 @api_view(["GET"])
@@ -279,6 +354,8 @@ def explore(request):
     city_name = request.GET.get("city_name")
     date = request.GET.get("date")
     language = request.GET.get("language")
+    price1= request.GET.get("price1")
+    price2= request.GET.get("price2")
     try:       
 
         # Validate and parse date
@@ -303,15 +380,25 @@ def explore(request):
         if movie_title:
             shows = shows.filter(movie__title__icontains = movie_title)
         if language:
-            shows = shows.filter(language__name__icontains=language)
+            shows = shows.filter(language__name__icontains = language)
+        if price1 and price2:
+            try:
+              
+                shows = shows.filter(price__range=(price1, price2))
+            except ValueError:
+                return JsonResponse({"error": "Price values must be valid numbers."}, status=400)
 
-        result=shows.values('theater').annotate(showtimes=ArrayAgg(JSONObject(id = F('id'), time_slot= F('time_slot'))),                                                                                                                            
+        result=shows.values('theater').annotate(showtimes=ArrayAgg(JSONObject(id = F('id'),
+                                                                               time_slot= F('time_slot'),
+                                                                               price= F('price'))),                                                                                                                            
                                         movie_id = F('movie__id'),
                                         movie_title=F('movie__title'),
                                         language = F('language__name'),
                                         movie_image =F('movie__image'),
                                         theater_id = F('theater__id'),
                                         theater_name =F('theater__name'),
+                                        
+
                                         ).values('movie_id','movie_title','language','movie_image','theater_id','theater_name','showtimes')
         return JsonResponse(list(result),safe=False)
     except Theater.DoesNotExist:
@@ -320,68 +407,6 @@ def explore(request):
         return JsonResponse({"error": str(e)}, status=500)
 
     
-
-# @csrf_exempt
-# @require_http_methods(["GET"])
-# def theater_list_by_movie(request):
-#     movie_name = request.GET.get("movie_name")
-#     city_name = request.GET.get("city")
-#     location = request.GET.get("location")
-
-#     theaters = []
-#     seen = set()
-
-#     if not movie_name and not city_name and not location:
-#         # No filters at all: return all theaters
-#         all_theaters = Theater.objects.select_related('city').all()
-#         for theater in all_theaters:
-#             if theater.id in seen:
-#                 continue
-#             seen.add(theater.id)
-#             theaters.append({
-#                 "theater_id": theater.id,
-#                 "theater_name": theater.name,
-#                 "location": theater.location,
-#                 "city": theater.city.name,
-#             })
-#         return JsonResponse(theaters, safe=False)
-
-#     # If movie_name is provided, filter shows by movie
-#     if movie_name:
-#         try:
-#             movie = Movie.objects.get(title=movie_name)
-#         except Movie.DoesNotExist:
-#             return JsonResponse({"error": "Movie not found"}, status=404)
-
-#         shows = Show.objects.filter(movie=movie).select_related('theater', 'theater__city')
-#     else:
-#         # Get all shows if no movie_name is provided
-#         shows = Show.objects.select_related('theater', 'theater__city')
-
-#     for show in shows:
-#         theater = show.theater
-
-#         if theater.id in seen:
-#             continue
-
-#         # Apply optional city and location filters
-#         if city_name and theater.city.name.lower() != city_name.lower():
-#             continue
-#         if location and location.lower() not in theater.location.lower():
-#             continue
-
-#         seen.add(theater.id)
-#         theaters.append({
-#             "theater_id": theater.id,
-#             "theater_name": theater.name,
-#             "location": theater.location,
-#             "city": theater.city.name,
-#             "start_time": show.time_slot if movie_name else None,
-#         })
-
-#     return JsonResponse(theaters, safe=False)
-
-
 
 LOCK_EXPIRY_MINUTES = 5
 
@@ -488,7 +513,7 @@ def payment_confirm(request):
             return JsonResponse({"error": "Invalid session ID"}, status=404)
 
         if (now - session.created_at) > timedelta(minutes=LOCK_EXPIRY_MINUTES):
-            return JsonResponse({"error": "Session expired"}, status=400)
+            return JsonResponse({"error": "locking - Session expired"}, status=400)
 
 
         bookings = ShowSeatBooking.objects.filter(session_id=session, is_locked=True, is_booked=False)
@@ -497,7 +522,7 @@ def payment_confirm(request):
             return JsonResponse({"error": "No valid locked seats found for this usser"}, status=400)
 
         show = bookings.first().show
-        user = session.user  
+        user = session.user
         seat_numbers = []
         for booking in bookings:
             seat_numbers.append(booking.seat.seat_number)
@@ -634,3 +659,137 @@ def show_seat_layout(request):
         "show_id": show.id,
         "seats": seat_list
     })
+#--------------------------------------------my_bookings-----------------------------------------------------#
+# @login_required
+# def my_bookings(request):
+#     user = request.user
+
+#     # Get all bookings for the user
+#     bookings = Bookinginfo.objects.filter(user=user)
+
+#     booking_info_data = []
+
+#     for booking in bookings:
+#         # Get seat numbers as a list
+#         seat_numbers = []
+#         for seat in booking.seats.all():
+#             seat_numbers.append(seat.seat_number)
+
+#         # Get movie image URL or None
+#         movie = booking.show.movie
+#         if movie.image:
+#             movie_image_url = movie.image.url
+#         else:
+#             movie_image_url = None
+
+        
+        
+
+#         # Prepare row data
+#         booking_info_data.append({
+#             "id": booking.id,
+#             "show_date": booking.show.time_slot.date(),
+#             "movie_title": movie.title,
+#             "movie_image": movie_image_url,
+#             "showtime": booking.show.time_slot.strftime("%I:%M %p"),
+#             "seat_number": seat_numbers,
+#             "theater_name": booking.show.theater.name,
+#             "booking_time": booking.booking_time,
+#             "total_price": booking.show.price * booking.number_of_tickets,
+#             "is_paid": booking.is_paid
+
+#         })
+
+#     return render(request, 'ticket.html', {
+#         'data': booking_info_data
+#     })
+
+#--------------------------------------theater_list_by_movie-------------------------------------------------#
+
+# @csrf_exempt
+# @require_http_methods(["GET"])
+# def theater_list_by_movie(request):
+#     movie_name = request.GET.get("movie_name")
+#     city_name = request.GET.get("city")
+#     location = request.GET.get("location")
+
+#     theaters = []
+#     seen = set()
+
+#     if not movie_name and not city_name and not location:
+#         # No filters at all: return all theaters
+#         all_theaters = Theater.objects.select_related('city').all()
+#         for theater in all_theaters:
+#             if theater.id in seen:
+#                 continue
+#             seen.add(theater.id)
+#             theaters.append({
+#                 "theater_id": theater.id,
+#                 "theater_name": theater.name,
+#                 "location": theater.location,
+#                 "city": theater.city.name,
+#             })
+#         return JsonResponse(theaters, safe=False)
+
+#     # If movie_name is provided, filter shows by movie
+#     if movie_name:
+#         try:
+#             movie = Movie.objects.get(title=movie_name)
+#         except Movie.DoesNotExist:
+#             return JsonResponse({"error": "Movie not found"}, status=404)
+
+#         shows = Show.objects.filter(movie=movie).select_related('theater', 'theater__city')
+#     else:
+#         # Get all shows if no movie_name is provided
+#         shows = Show.objects.select_related('theater', 'theater__city')
+
+#     for show in shows:
+#         theater = show.theater
+
+#         if theater.id in seen:
+#             continue
+
+#         # Apply optional city and location filters
+#         if city_name and theater.city.name.lower() != city_name.lower():
+#             continue
+#         if location and location.lower() not in theater.location.lower():
+#             continue
+
+#         seen.add(theater.id)
+#         theaters.append({
+#             "theater_id": theater.id,
+#             "theater_name": theater.name,
+#             "location": theater.location,
+#             "city": theater.city.name,
+#             "start_time": show.time_slot if movie_name else None,
+#         })
+
+#     return JsonResponse(theaters, safe=False)
+
+
+#------------------------------------------------login_user--------------------------------------------------#
+
+
+# @csrf_exempt
+# @require_http_methods(["POST"])
+# def login_user(request):
+#     try:
+#         data = json.loads(request.body)
+#         username = data.get("username")
+#         password = data.get("password")
+
+#         if not username or not password:
+#             return JsonResponse({"error": "Username and password are required"}, status=400)
+
+#         user = authenticate(username=username, password=password)
+#         if user is None:
+#             return JsonResponse({"error": "Invalid credentials"}, status=401)
+
+#         token = generate_jwt(user)
+
+#         return JsonResponse({"token": token, "message": "Login successful"})
+
+#     except Exception as e:
+#         return JsonResponse({"error": str(e)}, status=500)
+
+#------------------------------------------------------------------------------------------------------------#

@@ -59,19 +59,24 @@ class Movie(models.Model):
     title = models.CharField(max_length=100)
     duration_min = models.IntegerField()
     release_date = models.DateField(null=True, blank=True)
-    description =  models.CharField(max_length=100)
+    description =  models.CharField(max_length=1000)
     genres =  models.ManyToManyField(Genre,max_length=100)
     language = models.ManyToManyField(Language,max_length=20)
     image = models.ImageField(upload_to='movies/', null=True, blank=True)
 
     def __str__(self):
         return self.title
+    
+
+
+
 
 class Show(models.Model):
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
     theater = models.ForeignKey(Theater, on_delete=models.CASCADE)
     language= models.ForeignKey(Language,on_delete=models.CASCADE)
-    seats = models.ManyToManyField(Seat,through='ShowSeatBooking') 
+    seats = models.ManyToManyField(Seat,through='ShowSeatBooking')
+    price = models.IntegerField(default=0)
     time_slot = models.DateTimeField()
 
     def __str__(self):
@@ -118,6 +123,7 @@ class ShowSeatBooking(models.Model):
     session_id = models.ForeignKey(Session,on_delete=models.CASCADE)
     is_booked = models.BooleanField(default=False)
     is_locked = models.BooleanField(default=False)
+    
     # locked_at = models.DateTimeField(auto_now_add=True) 
     # booked_at = models.DateTimeField(auto_now_add=True)
 

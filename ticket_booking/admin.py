@@ -1,11 +1,15 @@
 from django.contrib import admin
-from .models import Movie, Theater, Show, Seat, Bookinginfo , Genre, Language , State , City , ShowSeatBooking ,Session
+from .models import Movie, Theater, Show, Seat, Bookinginfo , Genre, Language , State , City , ShowSeatBooking ,Session, customUser
 from django.utils.html import format_html
 
 class TheaterAdmin(admin.ModelAdmin):
     list_display = ('id','name','location','city__name','city__state__name')
     search_fields = ('name',)
-
+class CostumUserAdmin(admin.ModelAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name', 'contact_no', 'is_admin','is_staff')
+    search_fields = ('username', 'email')
+    list_filter = ('is_admin',)
+    
     
 
 class StateAdmine(admin.ModelAdmin):
@@ -15,7 +19,7 @@ class CityAdmine(admin.ModelAdmin):
     list_display = ('name','state',)
 
 class MovieAdmin(admin.ModelAdmin):
-    list_display = ('title', 'duration_min', 'release_date', 'get_genres','get_lang','image_tag',)
+    list_display = ('id','title', 'duration_min', 'release_date', 'get_genres','get_lang','image_tag',)
     search_fields = ('title',)
 
     
@@ -44,7 +48,7 @@ class LanguageAmine (admin.ModelAdmin):
 
 # Custom method added to ShowAdmin to calculate available seats
 class ShowAdmin(admin.ModelAdmin):
-    list_display = ("id",'movie','language', 'theater', 'theater__location','theater__city__name','time_slot',)
+    list_display = ("id",'movie','language', 'theater', 'theater__location','theater__city__name','time_slot','price')
     list_filter = ('theater', 'time_slot')
     search_fields = ('movie__title', 'theater__name')
 
@@ -58,17 +62,17 @@ class SeatAdmin(admin.ModelAdmin):
 
 
 class BookinginfoAdmin(admin.ModelAdmin):
-    list_display = ('user', 'booking_time', 'number_of_tickets','theater','is_paid','show',"get_seats")
+    list_display = ('id','user', 'booking_time', 'number_of_tickets','theater','is_paid','show',"get_seats")
     # filter_horizontal = ('seats',)
     def get_seats(self, obj):
         return ", ".join(seat.seat_number for seat in obj.seats.all())
     get_seats.short_description = 'seat'
 
 class ShowSeatBookingAdmin(admin.ModelAdmin):
-    list_display =('show','seat','bookinginfo',)
+    list_display =('show','seat','bookinginfo',"session_id__session_id","is_booked")
 
 class SessionAdmin(admin.ModelAdmin):
-    list_display = ('user','session_id','created_at')
+    list_display = ('user','session_id','created_at',)
 
 
 
@@ -77,6 +81,7 @@ class SessionAdmin(admin.ModelAdmin):
 
 
 
+admin.site.site_header = "BookMyShow Admin"
 admin.site.register(Theater, TheaterAdmin)
 admin.site.register(Movie, MovieAdmin)
 admin.site.register(Show, ShowAdmin)
@@ -88,3 +93,4 @@ admin.site.register(State, StateAdmine)
 admin.site.register(City, CityAdmine)
 admin.site.register(ShowSeatBooking,ShowSeatBookingAdmin)
 admin.site.register(Session,SessionAdmin)
+admin.site.register(customUser,CostumUserAdmin)

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Booking Confirmation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+        .invoice-container { max-width: 700px; background: #fff; padding: 20px; margin: auto; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        .header { text-align: center; margin-bottom: 20px; }
+        .image-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .movie-img { width: 50%; height: auto;  border-radius: 8px; }
+        .stamp-img { width: 50%; height: auto; }
+        table { width: 100%; border-collapse: collapse; background: #f9f9f9; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #e2e2e2; }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="header">
+            <h2>Booking Confirmation</h2>
+        </div>
+
+        <div class="image-container">
+            {% if booking.show.movie.image %}
+                <img class="movie-img" src="{{ booking.show.movie.image.url }}" alt="{{ booking.show.movie.title }}">
+            {% endif %}
+            
+            <!-- Add your confirmation stamp image here -->
+            <img class="stamp-img" src="/media/confirmed-vector-stamp-isolated-on-600nw-1561368712.webp" alt="Confirmed">
+
+        </div>
+
+        <table>
+            <tr>
+                <th>Movie</th>
+                <td>{{ booking.show.movie.title }}</td>
+            </tr>
+            <tr>
+                <th>Name</th>
+                <td>{{ booking.user.username }}</td>
+            </tr>
+            <tr>
+                <th>Theater</th>
+                <td>{{ booking.show.theater.name }}</td>
+            </tr>
+            <tr>
+                <th>Location</th>
+                <td>{{ booking.show.theater.location }}</td>
+            </tr>
+            <tr>
+                <th>Showtime</th>
+                <td>{{ booking.show.time_slot }}</td>
+            </tr>
+            <tr>
+                <th>Seats</th>
+                <td>{{ seat_numbers|join:", " }}</td>
+            </tr>
+            <tr>
+                <th>Booking Time</th>
+                <td>{{ booking.booking_time }}</td>
+            </tr>
+            <tr>
+                <th>Amount Paid</th>
+                <td>{{ total_price }}</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td>{% if booking.is_paid %}Paid{% else %}Not Paid{% endif %}</td>
+            </tr>
+        </table>
+    </div>
+    
+
+</body>
+</html>
