@@ -1,8 +1,9 @@
-from django.utils import timezone
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.conf import settings
 import uuid
+import random
+from django.db import models
+from django.utils import timezone
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser
 # from django.dispatch import receiver
 # from django.db.models.signals import post_save
 class customUser(AbstractUser):
@@ -78,6 +79,7 @@ class Show(models.Model):
     seats = models.ManyToManyField(Seat,through='ShowSeatBooking')
     price = models.IntegerField(default=0)
     time_slot = models.DateTimeField()
+    
 
     def __str__(self):
         if self.movie:
@@ -130,3 +132,11 @@ class ShowSeatBooking(models.Model):
     class Meta:
         unique_together = ('show', 'seat')
 
+
+
+
+
+class OTPStorage(models.Model):
+    email = models.EmailField()
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)

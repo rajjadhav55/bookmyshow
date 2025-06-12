@@ -1,5 +1,7 @@
 import os
+import random
 import json , uuid
+from django.conf import settings
 from weasyprint import HTML
 from datetime import datetime
 from datetime import timedelta
@@ -7,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import  render
 from django.db.models import Min , F
+from django.core.mail import send_mail
 from rest_framework.response import Response
 from django.templatetags.static import static
 from django.contrib.auth import get_user_model
@@ -20,12 +23,70 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes
-from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session
-# from .utils import generate_jwt 
-# 
+from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session , OTPStorage
 
 
 User = get_user_model() 
+LOCK_EXPIRY_MINUTES = 5
+
+
+
+
+
+
+@csrf_exempt
+def send_otp(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        email = data.get('email')
+
+        if not email:
+            return JsonResponse({'success': False, 'message': 'Email is required'}, status=400)
+
+        otp = str(random.randint(100000, 999999))
+        OTPStorage.objects.create(email=email, otp=otp)
+
+        send_mail(
+            subject='Your OTP Code',
+            message=f'Your OTP is {otp}',
+            from_email=settings.EMAIL_HOST_USER,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+
+        return JsonResponse({'success': True, 'message': 'OTP sent'})
+
+    else:
+        return JsonResponse({'success': False, 'message': 'Only POST method allowed'}, status=405)
+
+
+@csrf_exempt
+def verify_otp(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        email = data.get('email')
+        otp = data.get('otp')
+        now = timezone.now()
+       
+        
+        try:
+            otp_entry = OTPStorage.objects.get(email=email,otp=otp)
+        except OTPStorage.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Invalid OTP'})
+
+        if (now - otp_entry.created_at) < timedelta (minutes= LOCK_EXPIRY_MINUTES):
+            return JsonResponse({'success': False,
+                                'message':'OTP expired'})
+            
+        
+
+        return JsonResponse({'success': True, 
+                                'message': 'OTP verified'})
+    else:
+        return JsonResponse({'success': False,
+                            'message': 'POST method is allowed'})
+
+
 
 @csrf_exempt 
 @require_http_methods(["POST"])
@@ -117,7 +178,7 @@ def movie_list(request):
             movies = Movie.objects.all()
 
         #  Apply additional filters
-        if genre:
+        if genre:            
             movies = movies.filter(genres__name__icontains=genre)
         if language:
             movies = movies.filter(language__name__icontains=language)
@@ -294,14 +355,15 @@ def booking_info (request):
             "show_id":booking.show.id,
             "show_date": booking.show.time_slot.date(),
             "showtime": booking.show.time_slot.strftime("%I:%M %p"),
-            "booking_time":booking.booking_time,
+            "booking_date":booking.booking_time.date(),
+            "booking_time":booking.booking_time.strftime("%I:%M %p"),
             "seat_number":seat_numbers,
             "total_price": f'₹{booking.show.price * booking.number_of_tickets}/-',
             "is_paid":booking.is_paid,
-
-            
-
-        })
+                    
+                    
+                })
+        
     return JsonResponse({
         "success": True,
         "username": user.username,
@@ -324,7 +386,7 @@ def generate_invoice_pdf(request, booking_id):
     for seat in booking.seats.all():
         seat_numbers.append(seat.seat_number)
 
-    # Generate absolute image URL
+    
     image_url = request.build_absolute_uri(booking.show.movie.image.url)
 
    
@@ -382,24 +444,26 @@ def explore(request):
         if language:
             shows = shows.filter(language__name__icontains = language)
         if price1 and price2:
-            try:
               
+            try:
                 shows = shows.filter(price__range=(price1, price2))
             except ValueError:
                 return JsonResponse({"error": "Price values must be valid numbers."}, status=400)
-
+        
         result=shows.values('theater').annotate(showtimes=ArrayAgg(JSONObject(id = F('id'),
-                                                                               time_slot= F('time_slot'),
-                                                                               price= F('price'))),                                                                                                                            
+                                                                              time_slot= F('time_slot'),
+                                                                              language = F('language__name'),                                                                                                                            
+                                                                              price= F('price'))),
                                         movie_id = F('movie__id'),
-                                        movie_title=F('movie__title'),
-                                        language = F('language__name'),
-                                        movie_image =F('movie__image'),
                                         theater_id = F('theater__id'),
+                                        movie_title=F('movie__title' ),                                  
+                                        movie_image =F('movie__image' ),
                                         theater_name =F('theater__name'),
+                                        theater_location = F('theater__location')
                                         
 
-                                        ).values('movie_id','movie_title','language','movie_image','theater_id','theater_name','showtimes')
+                                        ).values('movie_id','movie_title','movie_image','theater_id','theater_name','theater_location','showtimes')
+        
         return JsonResponse(list(result),safe=False)
     except Theater.DoesNotExist:
         return JsonResponse({"error": "Theater not found."}, status=404)
@@ -408,7 +472,6 @@ def explore(request):
 
     
 
-LOCK_EXPIRY_MINUTES = 5
 
 @permission_classes([IsAuthenticated])
 @api_view(["POST"])
@@ -430,6 +493,10 @@ def initial_booking(request):
         show = Show.objects.get(id=show_id)
         now = timezone.now()
 
+        show_time=show.time_slot
+        if now > show_time:
+            return JsonResponse({"error": "show is unavailabe"}, status=400)
+        
     
         locked_seats = []
         failed_seats = []
@@ -514,13 +581,15 @@ def payment_confirm(request):
 
         if (now - session.created_at) > timedelta(minutes=LOCK_EXPIRY_MINUTES):
             return JsonResponse({"error": "locking - Session expired"}, status=400)
-
+        
+        
 
         bookings = ShowSeatBooking.objects.filter(session_id=session, is_locked=True, is_booked=False)
 
         if not bookings:
             return JsonResponse({"error": "No valid locked seats found for this usser"}, status=400)
-
+        
+        
         show = bookings.first().show
         user = session.user
         seat_numbers = []
@@ -592,7 +661,6 @@ def retrieve_movie(request, movie_id):
 
 
 
-LOCK_EXPIRY_MINUTES = 5
 
 
 @api_view(["GET"])

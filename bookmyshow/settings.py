@@ -40,6 +40,13 @@ CORS_ALLOW_METHODS =[
 # for custom user
 AUTH_USER_MODEL = 'ticket_booking.customUser'
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = 'jadhavraj0501@gmail.com'
+EMAIL_HOST_PASSWORD = 'rufd tpax plii txrg'
+# EMAIL_HOST_PASSWORD ='fvcd qgqg ooku yeod'
+EMAIL_USE_TLS = True
 
 # Application definition
 
