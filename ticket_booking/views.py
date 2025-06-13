@@ -18,6 +18,7 @@ from django.templatetags.static import static
 from django.contrib.auth import get_user_model
 from django.db.models.functions import JSONObject
 from django.http import JsonResponse ,HttpResponse
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import IsAuthenticated
@@ -35,13 +36,6 @@ OTP_RESEND_MINUTES = 1
 BLOCK_USER_MINUTES = 10
 OTP_LIFE_SPAN = 1
 now = timezone.now()
-
-
-
-
-
-
-
 
 
 
@@ -688,63 +682,93 @@ def payment (request):
     })
 
 
-@permission_classes([IsAuthenticated])
-@api_view(["POST","GET"])
 
+
+
+
+
+@permission_classes([IsAuthenticated])
+@api_view(["POST", "GET"])
 def payment_confirm(request):
     try:
-        session_id = request.GET.get("session_id")
-        if not session_id:
-            return JsonResponse({"error": "Session ID is required"}, status=400)
+        with transaction.atomic():
+            session_id = request.GET.get("session_id")
+            if not session_id:
+                return JsonResponse({"error": "Session ID is required"}, status=400)
 
-        now = timezone.now()
+            now = timezone.now()
 
-        try:
-            session = Session.objects.get(session_id=session_id)
-        except Session.DoesNotExist:
-            return JsonResponse({"error": "Invalid session ID"}, status=404)
+            try:
+                session = Session.objects.get(session_id=session_id)
+            except Session.DoesNotExist:
+                raise Exception("Invalid session ID")
 
-        if (now - session.created_at) > timedelta(minutes=LOCK_EXPIRY_MINUTES):
-            return JsonResponse({"error": "locking - Session expired"}, status=400)
-        
-        
+            if (now - session.created_at) > timedelta(minutes=LOCK_EXPIRY_MINUTES):
+                raise Exception("locking - Session expired")
 
-        bookings = ShowSeatBooking.objects.filter(session_id=session, is_locked=True, is_booked=False)
+            bookings = ShowSeatBooking.objects.filter(
+                session_id=session, is_locked=True, is_booked=False
+            )
 
-        if not bookings:
-            return JsonResponse({"error": "No valid locked seats found for this usser"}, status=400)
-        
-        
-        show = bookings.first().show
-        user = session.user
-        seat_numbers = []
-        for booking in bookings:
-            seat_numbers.append(booking.seat.seat_number)
+            if not bookings.exists():
+                return JsonResponse({"error": "No valid locked seats found for this user"}, status=400)
 
-        # Create BookingInfo
-        booking_info = Bookinginfo.objects.create(
-            user=user,
-            theater=show.theater,
-            show=show,
-            number_of_tickets=bookings.count(),
-            is_paid=True
-        )
+            show = bookings.first().show
+            user = session.user
 
-        # Mark seats as booked and link to booking_info
-        for booking in bookings:
-            booking.is_booked = True
-            booking.bookinginfo = booking_info
-            booking.save()
-            booking_info.seats.add(booking.seat)
+            # Create BookingInfo
+            booking_info = Bookinginfo.objects.create(
+                user=user,
+                theater=show.theater,
+                show=show,
+                number_of_tickets=bookings.count(),
+                is_paid=True
+            )
 
-        return JsonResponse({
-            "message": "Seats successfully booked",
-            "booked_seats": seat_numbers,
-            "booking_info_id": booking_info.id
-        })
+            # Mark seats as booked and link to booking_info
+            seat_numbers = []
+            for booking in bookings:
+                booking.is_booked = True
+                booking.bookinginfo = booking_info
+                booking.save()
+                booking_info.seats.add(booking.seat)
+                seat_numbers.append(booking.seat.seat_number)
+
+            # Get image URLs
+            image_url = request.build_absolute_uri(booking.show.movie.image.url)
+            stamp_url = request.build_absolute_uri('/media/confirmed-vector-stamp-isolated-on-600nw-1561368712.webp')
+
+            # Render email content
+            html_content = render_to_string('email_ticket.html', {
+                'booking': booking_info,
+                'seat_numbers': seat_numbers,
+                'movie_image_url': image_url,
+                'stamp_image_url': stamp_url,
+                'total_price': show.price * bookings.count(),
+            })
+
+            text_content = f"Your booking for {show.movie.title} has been confirmed. Seats: {', '.join(seat_numbers)}."
+
+            # Send email
+            email = EmailMultiAlternatives(
+                subject=f"🎬 Booking Confirmed: {show.movie.title}",
+                body=text_content,
+                from_email=settings.EMAIL_HOST_USER,
+                to=[user.email],
+            )
+            email.attach_alternative(html_content, "text/html")
+            email.send()
+
+            return JsonResponse({
+                "message": "Seats successfully booked",
+                "user_email": user.email,
+                "booked_seats": seat_numbers,
+                "booking_info_id": booking_info.id
+            })
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
     
 
 

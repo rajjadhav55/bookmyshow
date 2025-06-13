@@ -126,8 +126,7 @@ class ShowSeatBooking(models.Model):
     is_booked = models.BooleanField(default=False)
     is_locked = models.BooleanField(default=False)
     
-    # locked_at = models.DateTimeField(auto_now_add=True) 
-    # booked_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         unique_together = ('show', 'seat')

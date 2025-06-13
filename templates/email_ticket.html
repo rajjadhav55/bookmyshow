@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎬 Booking Confirmation</title>
+</head>
+<body style="font-family: 'Arial', sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
+    <div style="
+        max-width: 700px; background: #ffffff; padding: 30px; margin: 40px auto; 
+        border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); border: 2px solid #0057ff;">
+        <h2 style="text-align: center; color: #0057ff; font-size: 24px; font-weight: bold; margin-bottom: 20px;">
+            🎟️ Your Booking is Confirmed!
+        </h2>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <img src="{{ movie_image_url }}" alt="{{ booking.show.movie.title }}" 
+                 style="width: 180px; border: 3px solid black; border-radius: 10px; margin-right: 30px;">
+            <img src="{{ stamp_image_url }}" alt="Confirmed" style="max-width: 50%; height: auto;">
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; background: #f9f9f9; border-radius: 8px; overflow: hidden;">
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Movie</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.show.movie.title }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Name</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.user.username }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Theater</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.show.theater.name }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Location</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.show.theater.location }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Showtime</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.show.time_slot }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Seats</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ seat_numbers|join:", " }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Booking Time</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">{{ booking.booking_time }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Amount Paid</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">₹{{ total_price }}</td>
+            </tr>
+            <tr>
+                <th style="padding: 14px; text-align: left; background: #0057ff; color: white; font-weight: bold;">Status</th>
+                <td style="padding: 14px; border-bottom: 1px solid #ddd; color: #333;">
+                    {% if booking.is_paid %}
+                        Paid
+                    {% else %}
+                        Not Paid
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <p style="font-size: 16px; color: #555;">Enjoy your movie! 🍿</p>
+            <p style="font-size: 18px; font-weight: bold; color: #0057ff;">Team BookMyShow</p>
+        </div>
+    </div>
+</body>
+</html>

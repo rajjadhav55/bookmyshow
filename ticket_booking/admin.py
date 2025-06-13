@@ -6,7 +6,7 @@ class TheaterAdmin(admin.ModelAdmin):
     list_display = ('id','name','location','city__name','city__state__name')
     search_fields = ('name',)
 class CostumUserAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'contact_no', 'is_admin','is_staff')
+    list_display = ('id','username', 'email', 'first_name', 'last_name', 'contact_no', 'is_admin','is_staff')
     search_fields = ('username', 'email')
     list_filter = ('is_admin',)
     
