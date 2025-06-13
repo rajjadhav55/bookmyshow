@@ -140,3 +140,9 @@ class OTPStorage(models.Model):
     email = models.EmailField()
     otp = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
+    counter=  models.IntegerField(default=1)
+    is_expired = models.BooleanField(default=False)
+    
+
+    class Meta:
+        get_latest_by = "created_at"

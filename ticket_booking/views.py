@@ -1,15 +1,18 @@
 import os
 import random
 import json , uuid
-from django.conf import settings
 from weasyprint import HTML
 from datetime import datetime
 from datetime import timedelta
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import  render
 from django.db.models import Min , F
 from django.core.mail import send_mail
+from email.message import  EmailMessage
+from django.utils.html import format_html
+from django.core.mail import  EmailMessage
 from rest_framework.response import Response
 from django.templatetags.static import static
 from django.contrib.auth import get_user_model
@@ -28,6 +31,14 @@ from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Sea
 
 User = get_user_model() 
 LOCK_EXPIRY_MINUTES = 5
+OTP_RESEND_MINUTES = 1
+BLOCK_USER_MINUTES = 10
+OTP_LIFE_SPAN = 1
+now = timezone.now()
+
+
+
+
 
 
 
@@ -36,55 +47,149 @@ LOCK_EXPIRY_MINUTES = 5
 
 @csrf_exempt
 def send_otp(request):
-    if request.method == "POST":
+    if request.method != "POST":
+        return JsonResponse({'success': False, 'message': 'Only POST method allowed'}, status=405)
+
+    try:
         data = json.loads(request.body)
         email = data.get('email')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON'}, status=400)
 
-        if not email:
-            return JsonResponse({'success': False, 'message': 'Email is required'}, status=400)
+    if not email:
+        return JsonResponse({'success': False, 'message': 'Email is required'}, status=400)
 
-        otp = str(random.randint(100000, 999999))
-        OTPStorage.objects.create(email=email, otp=otp)
+    now = timezone.now()
 
-        send_mail(
-            subject='Your OTP Code',
-            message=f'Your OTP is {otp}',
-            from_email=settings.EMAIL_HOST_USER,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+    try:
+        last_otp = OTPStorage.objects.filter(email=email).latest()
+        time_diff = now - last_otp.created_at
 
-        return JsonResponse({'success': True, 'message': 'OTP sent'})
+        # If too soon to resend
+        if time_diff < timedelta(minutes=OTP_RESEND_MINUTES):
+            return JsonResponse({'success': False, 'message': 'Please wait 60 seconds before requesting another OTP'}, status=400)
 
-    else:
-        return JsonResponse({'success': False, 'message': 'Only POST method allowed'}, status=405)
+        # Reset counter after BLOCK_USER_MINUTES
+        if time_diff > timedelta(minutes=BLOCK_USER_MINUTES):
+            previous_counter = 0
+        else:
+            previous_counter = last_otp.counter
+
+        # Block if too many attempts
+        if previous_counter >= 3:
+            return JsonResponse({'success': False, 'message': 'Too many attempts. Try again in sometime.'}, status=400)
+
+    except OTPStorage.DoesNotExist:
+        previous_counter = 0
+
+    # Expire all valid old OTPs before sending a new one
+    OTPStorage.objects.filter(email=email,is_expired=False).update(is_expired=True)
+
+    # Generate new OTP
+    otp = str(random.randint(100000, 999999))
+    OTPStorage.objects.create(
+        email=email,
+        otp=otp,
+        counter=previous_counter + 1,
+        is_expired=False
+    )
+
+    # Email message
+    subject = "Your OTP Code"
+    body = format_html(f'''
+    <div style="
+        font-family: 'Helvetica Neue', Arial, sans-serif; 
+        color: #333; 
+        text-align: center; 
+        border: 2px solid #0057ff; 
+        padding: 25px; 
+        margin: 20px auto; 
+        border-radius: 12px; 
+        max-width: 600px; 
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.2);
+    ">
+        <p style="font-size: 20px; font-weight: bold; color: #0057ff;">🔒 Secure Verification</p>
+        <p style="font-size: 16px;">Dear User,</p>
+        <p style="font-size: 16px;">Your One-Time Password (OTP) for verification is:</p>
+        <div style="
+            background-color: #0057ff;
+            color: white;
+            font-size: 32px;
+            padding: 18px 30px;
+            display: inline-block;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-align: center;
+            box-shadow: 0px 5px 10px rgba(0,0,0,0.3);
+        ">{otp}</div>
+        <p style="font-size: 16px; font-weight: bold; color: #d32f2f;">⚠️ This OTP is valid for 5 minutes. Do not share it with anyone.</p>
+        <p style="font-size: 14px; color: #555;">If you did not request this, please ignore this email.</p>
+        <div style="border-top: 2px solid #0057ff; margin: 20px auto; width: 60%;"></div>
+        <p style="font-size: 16px;">Best regards,</p>
+        <p style="font-size: 18px; font-weight: bold; color: #0057ff;">Team BookMyShow</p>
+    </div>
+''')
+
+
+
+
+
+
+
+
+    email_message = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=settings.EMAIL_HOST_USER,
+        to=[email],
+    )
+    email_message.content_subtype = 'html'
+    email_message.send(fail_silently=False)
+
+    return JsonResponse({'success': True, 'message': 'OTP sent successfully'})
+
+
 
 
 @csrf_exempt
 def verify_otp(request):
-    if request.method == "POST":
+    if request.method != "POST":
+        return JsonResponse({'success': False, 'message': 'Only POST method is allowed'}, status=405)
+
+    try:
         data = json.loads(request.body)
         email = data.get('email')
         otp = data.get('otp')
-        now = timezone.now()
-       
-        
-        try:
-            otp_entry = OTPStorage.objects.get(email=email,otp=otp)
-        except OTPStorage.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Invalid OTP'})
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return JsonResponse({'success': False, 'message': 'Invalid request data'}, status=400)
 
-        if (now - otp_entry.created_at) < timedelta (minutes= LOCK_EXPIRY_MINUTES):
-            return JsonResponse({'success': False,
-                                'message':'OTP expired'})
-            
-        
+    if not email or not otp:
+        return JsonResponse({'success': False, 'message': 'Email and OTP are required'}, status=400)
 
-        return JsonResponse({'success': True, 
-                                'message': 'OTP verified'})
-    else:
-        return JsonResponse({'success': False,
-                            'message': 'POST method is allowed'})
+    now = timezone.now()
+
+    try:
+        otp_entry = OTPStorage.objects.get(email=email, otp=otp)
+    except OTPStorage.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Invalid OTP'}, status=400)
+
+    
+    if (now - otp_entry.created_at) > timedelta(minutes=LOCK_EXPIRY_MINUTES):
+        otp_entry.is_expired = True
+        otp_entry.save()
+        return JsonResponse({'success': False, 'message': 'OTP expired'}, status=400)
+
+    
+    if otp_entry.is_expired:
+        return JsonResponse({'success': False, 'message': 'OTP already expired'}, status=400)
+
+    
+    otp_entry.is_expired = True
+    otp_entry.save()
+
+    return JsonResponse({'success': True, 'message': 'OTP verified successfully'}, status=200)
 
 
 

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Movie, Theater, Show, Seat, Bookinginfo , Genre, Language , State , City , ShowSeatBooking ,Session, customUser
+from .models import Movie, Theater, Show, Seat, Bookinginfo , Genre, Language , State , City , ShowSeatBooking ,Session, customUser , OTPStorage
 from django.utils.html import format_html
 
 class TheaterAdmin(admin.ModelAdmin):
@@ -75,6 +75,10 @@ class SessionAdmin(admin.ModelAdmin):
     list_display = ('user','session_id','created_at',)
 
 
+class OTPstorageAdmin(admin.ModelAdmin):
+    list_display = ('id','email','created_at','otp','counter','is_expired')
+
+
 
 
 
@@ -94,3 +98,4 @@ admin.site.register(City, CityAdmine)
 admin.site.register(ShowSeatBooking,ShowSeatBookingAdmin)
 admin.site.register(Session,SessionAdmin)
 admin.site.register(customUser,CostumUserAdmin)
+admin.site.register(OTPStorage,OTPstorageAdmin)
