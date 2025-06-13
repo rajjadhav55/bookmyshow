@@ -7,6 +7,7 @@ from .views import generate_invoice_pdf
 
 urlpatterns = [
     path('', views.movie_list, name='movies'),
+    path('citys/',views.city_list, name="city"),
     path('explore/', views.explore, name='explore'),
     path('genre/',views.genre_list, name = 'genres'),
     path('payment/', views.payment , name = "payment"),
@@ -18,7 +19,6 @@ urlpatterns = [
     path('register_user/', views.register_user, name='register' ),
     path('booking_info/', views.booking_info, name="booking_info" ),
     path('seat_layout/', views.show_seat_layout, name='show_seat_layout'),
-    # path('email_verification/',views.send_otp_email,name= ' verification'),
     path('theater_list/', views.theater_list, name='theater_list_by_movie'),
     path('payment_confirm/', views.payment_confirm , name = "payment_confirm"),
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -27,6 +27,7 @@ urlpatterns = [
     path('download-invoice/<int:booking_id>/', generate_invoice_pdf, name='download_invoice'),
 
     # path('movie_list/', views.movie_list_with_status, name='movie_list_with_status'),
+    # path('email_verification/',views.send_otp_email,name= ' verification'),
     # path('mybookings/', views.my_bookings, name='my_bookings '),
     # path('theaters/', views.theater_list, name='theater list'),
     # path('lock_seats/', views.lock_seats, name='lock_seats'),

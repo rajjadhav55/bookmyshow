@@ -26,7 +26,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes
-from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session , OTPStorage
+from .models import Theater , Movie , Show , Bookinginfo , Genre , Language ,Seat ,ShowSeatBooking, customUser, Session , OTPStorage , City
 
 
 User = get_user_model() 
@@ -377,8 +377,28 @@ def genre_list (request):
             })
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
 
+
+
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def city_list (request):
+    city=request.GET.get('city')
+    citys = City.objects.all()
+    if city :
+        citys = citys.filter(name__icontains=city)
+    try:
+        city_list=[]
+        for city in citys:
+            city_list.append(city.name)
+            
+        return JsonResponse({
+                "citys":city_list
+            })
+    except Exception as e:
+         return JsonResponse({"error": str(e)}, status=500)
     
 
 
